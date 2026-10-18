@@ -1,132 +1,251 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
+import { BaseColors } from "@/components/base-colors";
 import { ChannelSlider } from "@/components/channel-slider";
 import { ColorBoard } from "@/components/color-board";
 import { HueWheel } from "@/components/hue-wheel";
 import { ProportionBar } from "@/components/proportion-bar";
 import { Segmented } from "@/components/segmented";
-import { Separator } from "@/components/ui/separator";
-import { resolveColor, type ColorStop } from "@/lib/color";
+import { resolveColor, stopFromHex, type ColorStop } from "@/lib/color";
 import {
   type HarmonyId,
-  applyHarmony,
+  applyHarmonyKeepingLocks,
   defaultHarmonyForCount,
   isHarmonyValidForCount,
 } from "@/lib/harmonies";
+import { useUndoableState } from "@/lib/history";
 import { wrapHue } from "@/lib/math";
 import {
   applyChannel,
-  applyHues,
   equalProportions,
   resizeStops,
 } from "@/lib/palette";
 
-type Count = 2 | 3 | 4 | 5;
+type Count = 1 | 2 | 3 | 4 | 5;
 type DisplayMode = "board" | "pattern";
-type UsageValue = "2" | "3" | "4" | "5" | "pattern";
+type UsageValue = "1" | "2" | "3" | "4" | "5" | "pattern";
 
-const INITIAL_COLORS: ColorStop[] = [
-  { l: 46, c: 34, h: 247 },
-  { l: 74, c: 18, h: 67 },
-];
+type AppState = {
+  count: Count;
+  mode: DisplayMode;
+  harmony: HarmonyId;
+  baseHue: number;
+  colors: ColorStop[];
+  locks: boolean[];
+  proportions: number[];
+  hueCount: number;
+  chromaCount: number;
+  lightnessCount: number;
+  columns: number;
+};
+
+const INITIAL: AppState = {
+  count: 2,
+  mode: "board",
+  harmony: "complementary",
+  baseHue: 247,
+  colors: [
+    { l: 46, c: 34, h: 247 },
+    { l: 74, c: 18, h: 67 },
+  ],
+  locks: [false, false],
+  proportions: [36, 64],
+  hueCount: 1,
+  chromaCount: 1,
+  lightnessCount: 5,
+  columns: 5,
+};
+
+function resizeLocks(locks: boolean[], count: number): boolean[] {
+  if (locks.length === count) return locks;
+  if (count < locks.length) return locks.slice(0, count);
+  return [...locks, ...Array.from({ length: count - locks.length }, () => false)];
+}
 
 export function ChromaApp() {
-  const [count, setCount] = useState<Count>(2);
-  const [mode, setMode] = useState<DisplayMode>("board");
-  const [harmony, setHarmony] = useState<HarmonyId>("complementary");
-  const [baseHue, setBaseHue] = useState(247);
-  const [colors, setColors] = useState<ColorStop[]>(INITIAL_COLORS);
-  const [proportions, setProportions] = useState<number[]>([36, 64]);
+  const { state, set } = useUndoableState<AppState>(INITIAL, {
+    limit: 10,
+    coalesceMs: 400,
+  });
+
+  const {
+    count,
+    mode,
+    harmony,
+    baseHue,
+    colors,
+    locks,
+    proportions,
+    hueCount,
+    chromaCount,
+    lightnessCount,
+    columns,
+  } = state;
 
   const resolved = useMemo(
     () => colors.map((stop) => resolveColor(stop)),
     [colors],
   );
 
-  const usage: UsageValue = mode === "pattern" ? "pattern" : String(count) as UsageValue;
+  const usage: UsageValue =
+    mode === "pattern" ? "pattern" : (String(count) as UsageValue);
+
+  function patch(partial: Partial<AppState>, coalesce = false) {
+    set((prev) => ({ ...prev, ...partial }), { coalesce });
+  }
 
   function setCountAndHarmony(nextCount: Count) {
     const nextStops = resizeStops(colors, nextCount);
+    const nextLocks = resizeLocks(locks, nextCount);
     const nextHarmony = isHarmonyValidForCount(harmony, nextCount)
       ? harmony
       : defaultHarmonyForCount(nextCount);
-    const hues =
+    const withHarmony =
       nextHarmony === "custom"
-        ? nextStops.map((stop) => stop.h)
-        : applyHarmony(baseHue, nextHarmony, nextCount);
+        ? nextStops
+        : applyHarmonyKeepingLocks(
+            nextStops,
+            nextLocks,
+            baseHue,
+            nextHarmony,
+          );
 
-    setCount(nextCount);
-    setMode("board");
-    setHarmony(nextHarmony);
-    setColors(applyHues(nextStops, hues));
-    setProportions(equalProportions(nextCount));
+    patch({
+      count: nextCount,
+      mode: "board",
+      harmony: nextHarmony,
+      colors: withHarmony,
+      locks: nextLocks,
+      proportions: equalProportions(nextCount),
+    });
   }
 
   function onUsageChange(value: UsageValue) {
     if (value === "pattern") {
-      setMode("pattern");
+      patch({ mode: "pattern" });
       return;
     }
     setCountAndHarmony(Number(value) as Count);
   }
 
   function onHarmonyChange(next: HarmonyId) {
-    setHarmony(next);
-    if (next === "custom") return;
-    const hues = applyHarmony(baseHue, next, count);
-    setColors(applyHues(colors, hues));
+    if (next === "custom") {
+      patch({ harmony: next });
+      return;
+    }
+    patch({
+      harmony: next,
+      colors: applyHarmonyKeepingLocks(colors, locks, baseHue, next),
+    });
   }
 
   function onRotate(nextBase: number) {
-    setBaseHue(nextBase);
     if (harmony === "custom") {
-      setColors(
-        applyHues(
-          colors,
-          colors.map((stop) => wrapHue(stop.h + (nextBase - baseHue))),
-        ),
+      const delta = nextBase - baseHue;
+      patch(
+        {
+          baseHue: nextBase,
+          colors: colors.map((stop, index) =>
+            locks[index] ? stop : { ...stop, h: wrapHue(stop.h + delta) },
+          ),
+        },
+        true,
       );
       return;
     }
-    setColors(applyHues(colors, applyHarmony(nextBase, harmony, count)));
+    patch(
+      {
+        baseHue: nextBase,
+        colors: applyHarmonyKeepingLocks(colors, locks, nextBase, harmony),
+      },
+      true,
+    );
   }
 
   function onHueChange(index: number, hue: number) {
-    setHarmony("custom");
-    setColors(
-      colors.map((stop, stopIndex) =>
+    if (locks[index]) {
+      const nextColors = colors.map((stop, stopIndex) =>
         stopIndex === index ? { ...stop, h: hue } : stop,
-      ),
-    );
-    if (index === 0) {
-      setBaseHue(hue);
+      );
+      if (harmony !== "custom") {
+        patch(
+          {
+            baseHue: index === 0 || !locks.some(Boolean) ? hue : baseHue,
+            colors: applyHarmonyKeepingLocks(nextColors, locks, hue, harmony),
+          },
+          true,
+        );
+        return;
+      }
+      patch(
+        {
+          baseHue: index === 0 ? hue : baseHue,
+          colors: nextColors,
+        },
+        true,
+      );
+      return;
     }
+
+    patch(
+      {
+        harmony: "custom",
+        baseHue: index === 0 ? hue : baseHue,
+        colors: colors.map((stop, stopIndex) =>
+          stopIndex === index ? { ...stop, h: hue } : stop,
+        ),
+      },
+      true,
+    );
+  }
+
+  function onLockToggle(index: number, locked: boolean) {
+    const nextLocks = locks.map((value, i) => (i === index ? locked : value));
+    if (locked && harmony !== "custom") {
+      patch({
+        locks: nextLocks,
+        baseHue: colors[index]?.h ?? baseHue,
+        colors: applyHarmonyKeepingLocks(
+          colors,
+          nextLocks,
+          colors[index]?.h ?? baseHue,
+          harmony,
+        ),
+      });
+      return;
+    }
+    patch({ locks: nextLocks });
+  }
+
+  function onBaseHexCommit(index: number, hex: string) {
+    const stop = stopFromHex(hex);
+    if (!stop) return;
+    const nextColors = colors.map((item, i) => (i === index ? stop : item));
+    if (harmony !== "custom" && locks[index]) {
+      patch({
+        baseHue: stop.h,
+        colors: applyHarmonyKeepingLocks(nextColors, locks, stop.h, harmony),
+      });
+      return;
+    }
+    patch({
+      baseHue: index === 0 ? stop.h : baseHue,
+      colors: nextColors,
+    });
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-[#F5F5F7] text-[#1D1D1F] lg:h-dvh lg:flex-row lg:overflow-hidden">
-      <aside className="flex w-full flex-col border-[#D2D2D7] bg-white lg:h-full lg:w-[360px] lg:shrink-0 lg:border-r">
-        <header className="px-6 pt-7 pb-5">
-          <p className="text-[11px] tracking-[0.28em] text-[#6E6E73] uppercase">
-            Palettes
-          </p>
-          <h1 className="mt-2 text-[28px] leading-none font-medium tracking-[-0.04em]">
-            Chroma
-          </h1>
-          <p className="mt-3 max-w-[18rem] text-[13px] leading-5 text-[#6E6E73]">
-            Combine colors in OKLCH. Set count, proportion, lightness, chroma,
-            then hue.
-          </p>
-        </header>
-
-        <div className="flex flex-col gap-7 px-6 pb-8 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+    <div className="flex h-dvh flex-col overflow-hidden bg-white text-[#1D1D1F] lg:flex-row">
+      <aside className="flex max-h-[48vh] w-full shrink-0 flex-col overflow-hidden bg-white lg:max-h-none lg:h-full lg:w-[360px]">
+        <div className="flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto px-6 pt-6 pb-8">
           <section className="flex flex-col gap-3">
             <div className="flex items-baseline justify-between">
               <h2 className="text-[13px] font-medium">Usage</h2>
               <span className="text-[11px] text-[#6E6E73]">
-                {count} colors{mode === "pattern" ? " · pattern" : ""}
+                {count} color{count === 1 ? "" : "s"}
+                {mode === "pattern" ? " · pattern" : ""}
               </span>
             </div>
             <Segmented
@@ -134,6 +253,7 @@ export function ChromaApp() {
               value={usage}
               onChange={onUsageChange}
               options={[
+                { value: "1", label: "1" },
                 { value: "2", label: "2" },
                 { value: "3", label: "3" },
                 { value: "4", label: "4" },
@@ -143,20 +263,29 @@ export function ChromaApp() {
             />
           </section>
 
-          <ProportionBar
-            values={proportions}
+          <BaseColors
             colors={resolved}
-            onChange={setProportions}
+            locks={locks}
+            onToggle={onLockToggle}
+            onHexCommit={onBaseHexCommit}
           />
 
-          <Separator className="bg-[#E8E8ED]" />
+          {count > 1 ? (
+            <ProportionBar
+              values={proportions}
+              colors={resolved}
+              onChange={(next) => patch({ proportions: next }, true)}
+            />
+          ) : null}
 
           <ChannelSlider
             label="Lightness"
             track="lightness"
             values={colors.map((stop) => stop.l)}
             colors={resolved}
-            onChange={(values) => setColors(applyChannel(colors, "l", values))}
+            onChange={(values) =>
+              patch({ colors: applyChannel(colors, "l", values) }, true)
+            }
           />
 
           <ChannelSlider
@@ -164,10 +293,10 @@ export function ChromaApp() {
             track="chroma"
             values={colors.map((stop) => stop.c)}
             colors={resolved}
-            onChange={(values) => setColors(applyChannel(colors, "c", values))}
+            onChange={(values) =>
+              patch({ colors: applyChannel(colors, "c", values) }, true)
+            }
           />
-
-          <Separator className="bg-[#E8E8ED]" />
 
           <HueWheel
             colors={resolved}
@@ -181,7 +310,20 @@ export function ChromaApp() {
         </div>
       </aside>
 
-      <ColorBoard colors={resolved} proportions={proportions} mode={mode} />
+      <ColorBoard
+        stops={colors}
+        proportions={proportions}
+        hueCount={hueCount}
+        chromaCount={chromaCount}
+        lightnessCount={lightnessCount}
+        columns={columns}
+        onHueCountChange={(value) => patch({ hueCount: value }, true)}
+        onChromaCountChange={(value) => patch({ chromaCount: value }, true)}
+        onLightnessCountChange={(value) =>
+          patch({ lightnessCount: value }, true)
+        }
+        onColumnsChange={(value) => patch({ columns: value })}
+      />
     </div>
   );
 }

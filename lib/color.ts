@@ -1,6 +1,8 @@
-import { formatHex, inGamut } from "culori";
+import { converter, formatHex, inGamut, parse } from "culori";
 
-import { clamp, roundTo } from "@/lib/math";
+import { clamp, roundTo, wrapHue } from "@/lib/math";
+
+const toOklch = converter("oklch");
 
 export type ColorStop = {
   l: number;
@@ -113,4 +115,33 @@ export function hexList(colors: ResolvedColor[]): string {
 
 export function oklchList(colors: ResolvedColor[]): string {
   return colors.map((color) => color.css).join("\n");
+}
+
+export function normalizeHexInput(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  return trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
+}
+
+/** Parse a hex (or CSS color) string into a UI ColorStop, or null if invalid. */
+export function stopFromHex(raw: string): ColorStop | null {
+  const normalized = normalizeHexInput(raw);
+  if (!normalized || normalized === "#") return null;
+  const parsed = parse(normalized);
+  if (!parsed) return null;
+  const oklch = toOklch(parsed);
+  if (!oklch || oklch.l == null) return null;
+  return {
+    l: roundTo((oklch.l ?? 0) * 100, 0),
+    c: roundTo(oklchChromaToUi(oklch.c ?? 0), 0),
+    h: wrapHue(oklch.h ?? 0),
+  };
+}
+
+export function keepLockedStops(
+  previous: ColorStop[],
+  next: ColorStop[],
+  locks: boolean[],
+): ColorStop[] {
+  return next.map((stop, index) => (locks[index] ? previous[index] ?? stop : stop));
 }

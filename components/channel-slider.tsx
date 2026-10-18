@@ -19,15 +19,15 @@ import { cn } from "@/lib/utils";
 type ChannelSliderProps = {
   label: string;
   values: number[];
-  colors: ResolvedColor[];
-  track: "lightness" | "chroma";
+  /** Kept for call-site stability; track chrome is grayscale. */
+  colors?: ResolvedColor[];
+  track?: "lightness" | "chroma";
   onChange: (values: number[]) => void;
 };
 
-function valueFromClientX(
-  clientX: number,
-  rect: DOMRect,
-): number {
+const HANDLE = 36;
+
+function valueFromClientX(clientX: number, rect: DOMRect): number {
   const ratio = (clientX - rect.left) / rect.width;
   return clamp(Math.round(ratio * 100), 0, 100);
 }
@@ -35,8 +35,7 @@ function valueFromClientX(
 export function ChannelSlider({
   label,
   values,
-  colors,
-  track,
+  colors = [],
   onChange,
 }: ChannelSliderProps) {
   const trackRef = useRef<HTMLDivElement>(null);
@@ -53,6 +52,9 @@ export function ChannelSlider({
   const offset = channelOffset(values);
   const min = Math.min(...values);
   const max = Math.max(...values);
+  const span = Math.max(max - min, 0);
+  const mid = (min + max) / 2;
+  const showSpan = span >= 18;
 
   function clientToValue(clientX: number): number {
     const rect = trackRef.current?.getBoundingClientRect();
@@ -77,10 +79,11 @@ export function ChannelSlider({
     const value = clientToValue(event.clientX);
     const index = nearestThumb(value);
     const thumbValue = values[index];
-    const thumbPx = ((trackRef.current?.getBoundingClientRect().width ?? 0) *
-      Math.abs(value - thumbValue)) /
+    const thumbPx =
+      ((trackRef.current?.getBoundingClientRect().width ?? 0) *
+        Math.abs(value - thumbValue)) /
       100;
-    const grabbingThumb = thumbPx <= 14;
+    const grabbingThumb = thumbPx <= HANDLE / 2 + 4;
     const grabbingOffset = !grabbingThumb && value >= min && value <= max;
 
     dragRef.current = {
@@ -104,7 +107,11 @@ export function ChannelSlider({
 
     if (drag.mode === "thumb") {
       onChange(
-        setChannelValue(drag.originValues, drag.index, clientToValue(event.clientX)),
+        setChannelValue(
+          drag.originValues,
+          drag.index,
+          clientToValue(event.clientX),
+        ),
       );
       return;
     }
@@ -124,114 +131,92 @@ export function ChannelSlider({
     dragRef.current = null;
   }
 
-  const trackBackground =
-    track === "lightness"
-      ? "linear-gradient(to right, #000000 0%, #FFFFFF 100%)"
-      : `linear-gradient(to right, oklch(62% 0 0), oklch(62% ${Math.max(colors[0]?.displayChroma ?? 0.08, 0.08)} ${colors[0]?.h ?? 250}))`;
-
   return (
     <section className="flex flex-col gap-3" aria-labelledby={labelId}>
-      <div className="flex items-end justify-between gap-3">
-        <Label id={labelId} className="text-[13px] font-medium text-[#1D1D1F]">
-          {label}
-        </Label>
-        <div className="flex min-w-0 flex-wrap justify-end gap-1.5">
-          {values.map((value, index) => (
-            <NumberField
-              key={index}
-              value={value}
-              min={0}
-              max={100}
-              className="w-[52px]"
-              aria-label={`${label} for color ${index + 1}`}
-              onCommit={(next) =>
-                onChange(setChannelValue(values, index, next))
-              }
-            />
-          ))}
-        </div>
-      </div>
+      <Label id={labelId} className="text-[13px] font-medium text-[#1D1D1F]">
+        {label}
+      </Label>
 
-      <div className="flex items-center gap-3">
-        <span className="w-6 text-[11px] tabular-nums text-[#6E6E73]">0</span>
+      <div
+        ref={trackRef}
+        className="relative h-9 touch-none select-none"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        role="group"
+        aria-label={`${label} slider`}
+      >
+        <div className="absolute inset-0 rounded-full bg-[#E5E5EA]" />
         <div
-          ref={trackRef}
-          className="relative h-8 flex-1 touch-none select-none"
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-          role="group"
-          aria-label={`${label} slider`}
-        >
-          <div
-            className="absolute top-1/2 right-0 left-0 h-[3px] -translate-y-1/2 rounded-full"
-            style={{ background: trackBackground }}
-          />
-          <div
-            className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-[#1D1D1F]/16"
-            style={{
-              left: `${min}%`,
-              width: `${Math.max(max - min, 0)}%`,
-            }}
-          />
-          {values.map((value, index) => {
-            const color = colors[index];
-            const isActive = index === activeIndex;
-            return (
-              <button
-                key={index}
-                type="button"
-                role="slider"
-                aria-label={`${label} ${index + 1}`}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={value}
-                className={cn(
-                  "absolute top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#D2D2D7] bg-white",
-                  isActive ? "z-20" : "z-10",
-                )}
-                style={{ left: `${value}%` }}
-                onPointerDown={(event) => {
-                  event.stopPropagation();
-                  setActiveIndex(index);
-                  dragRef.current = {
-                    mode: "thumb",
-                    index,
-                    originX: event.clientX,
-                    originValues: values.slice(),
-                  };
-                  event.currentTarget.setPointerCapture(event.pointerId);
-                }}
-                onPointerMove={onPointerMove}
-                onPointerUp={onPointerUp}
-                onKeyDown={(event) => {
-                  const step = event.shiftKey ? 10 : 1;
-                  if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
-                    event.preventDefault();
-                    onChange(setChannelValue(values, index, value - step));
-                  }
-                  if (event.key === "ArrowRight" || event.key === "ArrowUp") {
-                    event.preventDefault();
-                    onChange(setChannelValue(values, index, value + step));
-                  }
-                }}
-              >
-                <span
-                  className="absolute inset-[3px] rounded-full"
-                  style={{ background: color?.displayCss ?? "#888" }}
-                />
-              </button>
-            );
-          })}
-        </div>
-        <span className="w-8 text-right text-[11px] tabular-nums text-[#6E6E73]">
-          100
-        </span>
+          className="absolute inset-y-0 rounded-full bg-[#8E8E93]"
+          style={{
+            left: `${min}%`,
+            width: `${span}%`,
+          }}
+        />
+        {showSpan ? (
+          <span
+            className="pointer-events-none absolute top-1/2 -translate-x-1/2 -translate-y-1/2 text-[13px] font-semibold text-white tabular-nums"
+            style={{ left: `${mid}%` }}
+          >
+            {Math.round(gap)}
+          </span>
+        ) : null}
+        {values.map((value, index) => {
+          const isActive = index === activeIndex;
+          const color = colors[index];
+          return (
+            <button
+              key={index}
+              type="button"
+              role="slider"
+              aria-label={`${label} ${index + 1}`}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={value}
+              className={cn(
+                "absolute top-1/2 flex size-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-[12px] font-semibold tabular-nums shadow-[0_1px_3px_rgba(0,0,0,0.18)] ring-2 ring-white",
+                isActive ? "z-20" : "z-10",
+              )}
+              style={{
+                left: `${value}%`,
+                background: color?.displayCss ?? "#FFFFFF",
+                color: color?.labelColor ?? "#1D1D1F",
+              }}
+              onPointerDown={(event) => {
+                event.stopPropagation();
+                setActiveIndex(index);
+                dragRef.current = {
+                  mode: "thumb",
+                  index,
+                  originX: event.clientX,
+                  originValues: values.slice(),
+                };
+                event.currentTarget.setPointerCapture(event.pointerId);
+              }}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onKeyDown={(event) => {
+                const step = event.shiftKey ? 10 : 1;
+                if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+                  event.preventDefault();
+                  onChange(setChannelValue(values, index, value - step));
+                }
+                if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+                  event.preventDefault();
+                  onChange(setChannelValue(values, index, value + step));
+                }
+              }}
+            >
+              {value}
+            </button>
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <label className="flex items-center justify-between gap-2 text-[12px] text-[#6E6E73]">
+        <label className="flex items-center justify-start gap-2 text-[12px] text-[#6E6E73]">
           Offset
           <NumberField
             value={Math.round(offset)}
@@ -242,7 +227,7 @@ export function ChannelSlider({
             onCommit={(next) => onChange(setChannelOffset(values, next))}
           />
         </label>
-        <label className="flex items-center justify-between gap-2 text-[12px] text-[#6E6E73]">
+        <label className="flex items-center justify-start gap-2 text-[12px] text-[#6E6E73]">
           Gap
           <NumberField
             value={Math.round(gap)}

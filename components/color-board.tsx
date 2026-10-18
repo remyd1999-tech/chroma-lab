@@ -1,23 +1,38 @@
 "use client";
 
-import { Check, Copy } from "lucide-react";
-import { useState } from "react";
+import { Check, Copy, Minus, Plus } from "lucide-react";
+import { useMemo, useState } from "react";
 
+import { CountSlider } from "@/components/count-slider";
 import { Button } from "@/components/ui/button";
 import {
   cssVariablesBlock,
   hexList,
   oklchList,
+  type ColorStop,
   type ResolvedColor,
 } from "@/lib/color";
+import { clamp } from "@/lib/math";
+import { buildStaggerCombos, type StaggerCounts } from "@/lib/stagger";
+import { cn } from "@/lib/utils";
 
 type ColorBoardProps = {
-  colors: ResolvedColor[];
+  stops: ColorStop[];
   proportions: number[];
-  mode: "board" | "pattern";
+  hueCount: number;
+  chromaCount: number;
+  lightnessCount: number;
+  columns: number;
+  onHueCountChange: (value: number) => void;
+  onChromaCountChange: (value: number) => void;
+  onLightnessCountChange: (value: number) => void;
+  onColumnsChange: (value: number) => void;
 };
 
 type CopyKey = "oklch" | "hex" | "css" | number | null;
+
+const MIN_COLUMNS = 1;
+const MAX_COLUMNS = 12;
 
 async function writeClipboard(text: string): Promise<boolean> {
   try {
@@ -28,8 +43,38 @@ async function writeClipboard(text: string): Promise<boolean> {
   }
 }
 
-export function ColorBoard({ colors, proportions, mode }: ColorBoardProps) {
+export function ColorBoard({
+  stops,
+  proportions,
+  hueCount,
+  chromaCount,
+  lightnessCount,
+  columns,
+  onHueCountChange,
+  onChromaCountChange,
+  onLightnessCountChange,
+  onColumnsChange,
+}: ColorBoardProps) {
   const [copied, setCopied] = useState<CopyKey>(null);
+
+  const counts: StaggerCounts = useMemo(
+    () => ({
+      hue: hueCount,
+      chroma: chromaCount,
+      lightness: lightnessCount,
+    }),
+    [hueCount, chromaCount, lightnessCount],
+  );
+
+  const combos = useMemo(
+    () => buildStaggerCombos(stops, counts),
+    [stops, counts],
+  );
+
+  const flatColors = useMemo(
+    () => combos.map((combo) => combo.colors[0] as ResolvedColor),
+    [combos],
+  );
 
   async function copy(key: CopyKey, text: string) {
     const ok = await writeClipboard(text);
@@ -38,76 +83,120 @@ export function ColorBoard({ colors, proportions, mode }: ColorBoardProps) {
     window.setTimeout(() => setCopied(null), 1400);
   }
 
-  const repeats = mode === "pattern" ? 4 : 1;
-  const cycles = Array.from({ length: repeats }, (_, index) => index);
-
   return (
-    <div className="relative flex min-h-[42vh] flex-1 flex-col bg-white lg:min-h-0">
-      <div className="flex min-h-0 flex-1">
-        {cycles.map((cycle) => (
-          <div key={cycle} className="flex min-h-0 min-w-0 flex-1">
-            {colors.map((color, index) => (
-              <button
-                key={`${cycle}-${index}`}
-                type="button"
-                onClick={() => copy(index, color.css)}
-                className="relative min-w-0 overflow-hidden text-left transition-opacity hover:opacity-95"
-                style={{
-                  flexGrow: proportions[index],
-                  flexBasis: 0,
-                  background: color.displayCss,
-                  color: color.labelColor,
-                }}
-              >
-                {mode === "board" && cycle === 0 ? (
-                  <span className="absolute right-3 bottom-4 left-3 flex flex-col gap-1">
-                    <span className="text-[11px] tracking-[0.16em] uppercase opacity-70">
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
-                    <span className="text-[13px] leading-tight font-medium tracking-tight">
-                      {color.css}
-                    </span>
-                    <span className="text-[12px] tracking-tight uppercase opacity-80">
-                      {color.hex}
-                      {!color.inGamut ? " · clamped" : ""}
-                    </span>
-                    {copied === index ? (
-                      <span className="text-[11px] tracking-tight">
-                        Copied OKLCH
-                      </span>
-                    ) : null}
-                  </span>
-                ) : null}
-              </button>
-            ))}
-          </div>
-        ))}
-      </div>
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
+      <header className="flex shrink-0 flex-wrap items-start justify-between gap-4 bg-white px-5 py-4">
+        <div className="flex min-w-0 flex-1 basis-[16rem] flex-col gap-2.5 sm:max-w-md">
+          <CountSlider
+            label="Hue jumps"
+            value={hueCount}
+            min={1}
+            max={12}
+            onChange={onHueCountChange}
+          />
+          <CountSlider
+            label="C stagger"
+            value={chromaCount}
+            min={1}
+            max={12}
+            onChange={onChromaCountChange}
+          />
+          <CountSlider
+            label="L stagger"
+            value={lightnessCount}
+            min={1}
+            max={24}
+            onChange={onLightnessCountChange}
+          />
+        </div>
 
-      <div className="flex flex-wrap items-center gap-2 border-t border-[#D2D2D7] bg-[#F5F5F7] px-4 py-3">
-        <CopyButton
-          label="Copy OKLCH"
-          copied={copied === "oklch"}
-          onClick={() => copy("oklch", oklchList(colors))}
-        />
-        <CopyButton
-          label="Copy HEX"
-          copied={copied === "hex"}
-          onClick={() => copy("hex", hexList(colors))}
-        />
-        <CopyButton
-          label="Copy CSS"
-          copied={copied === "css"}
-          onClick={() => copy("css", cssVariablesBlock(colors))}
-        />
-        <div className="flex min-w-0 flex-1 flex-wrap justify-end gap-x-4 gap-y-1 text-[11px] tracking-tight text-[#6E6E73] tabular-nums">
-          {colors.map((color, index) => (
-            <span key={index}>
-              {String(index + 1).padStart(2, "0")} L {Math.round(color.l)} · C{" "}
-              {color.chroma.toFixed(2)}
-              {color.inGamut ? "" : `→${color.displayChroma.toFixed(2)}`} · H{" "}
-              {Math.round(color.h)}
-            </span>
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          <CopyButton
+            label="Copy OKLCH"
+            copied={copied === "oklch"}
+            onClick={() => copy("oklch", oklchList(flatColors))}
+          />
+          <CopyButton
+            label="Copy HEX"
+            copied={copied === "hex"}
+            onClick={() => copy("hex", hexList(flatColors))}
+          />
+          <CopyButton
+            label="Copy CSS"
+            copied={copied === "css"}
+            onClick={() => copy("css", cssVariablesBlock(flatColors))}
+          />
+          <span className="ml-1 text-[11px] tabular-nums text-[#6E6E73]">
+            {combos.length} · {columns} col
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-label="Remove column"
+            disabled={columns <= MIN_COLUMNS}
+            onClick={() =>
+              onColumnsChange(clamp(columns - 1, MIN_COLUMNS, MAX_COLUMNS))
+            }
+            className="size-8 rounded-full border-[#D2D2D7] bg-white p-0 shadow-none hover:bg-[#F5F5F7]"
+          >
+            <Minus className="size-3.5" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-label="Add column"
+            disabled={columns >= MAX_COLUMNS}
+            onClick={() =>
+              onColumnsChange(clamp(columns + 1, MIN_COLUMNS, MAX_COLUMNS))
+            }
+            className="size-8 rounded-full border-[#D2D2D7] bg-white p-0 shadow-none hover:bg-[#F5F5F7]"
+          >
+            <Plus className="size-3.5" />
+          </Button>
+        </div>
+      </header>
+
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <div
+          className="grid gap-x-3 gap-y-5 p-5"
+          style={{
+            gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+          }}
+        >
+          {combos.map((combo, index) => (
+            <button
+              key={`${combo.hueIndex}-${combo.chromaIndex}-${combo.lightnessIndex}`}
+              type="button"
+              title={combo.detail}
+              onClick={() => copy(index, oklchList(combo.colors))}
+              className="group flex min-w-0 flex-col gap-2 text-left"
+            >
+              <span className="flex aspect-[2/1] w-full overflow-hidden">
+                {combo.colors.map((color, colorIndex) => (
+                  <span
+                    key={colorIndex}
+                    className="min-w-0"
+                    style={{
+                      flexGrow: proportions[colorIndex] ?? 1,
+                      flexBasis: 0,
+                      background: color.displayCss,
+                    }}
+                  />
+                ))}
+              </span>
+              <span className="flex justify-center">
+                <span
+                  className={cn(
+                    "rounded-md bg-[#E8E8ED] px-2 py-0.5 text-[11px] font-medium tabular-nums text-[#3A3A3C]",
+                    copied === index && "bg-[#1D1D1F] text-white",
+                  )}
+                >
+                  {copied === index ? "Copied" : combo.label}
+                </span>
+              </span>
+            </button>
           ))}
         </div>
       </div>
@@ -130,13 +219,9 @@ function CopyButton({
       variant="outline"
       size="sm"
       onClick={onClick}
-      className="h-8 rounded-md border-[#D2D2D7] bg-white text-[12px] text-[#1D1D1F] shadow-none hover:bg-white"
+      className="h-8 rounded-full border-[#D2D2D7] bg-white text-[12px] text-[#1D1D1F] shadow-none hover:bg-white"
     >
-      {copied ? (
-        <Check className="size-3.5" />
-      ) : (
-        <Copy className="size-3.5" />
-      )}
+      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
       {copied ? "Copied" : label}
     </Button>
   );

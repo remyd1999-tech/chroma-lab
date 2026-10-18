@@ -26,7 +26,7 @@ export function Segmented<T extends string>({
     <div
       role="radiogroup"
       aria-label={ariaLabel}
-      className="flex w-full rounded-[7px] bg-[#E8E8ED] p-[3px]"
+      className="flex w-full rounded-full bg-[#E5E5EA] p-1"
     >
       {options.map((option) => {
         const selected = option.value === value;
@@ -38,12 +38,12 @@ export function Segmented<T extends string>({
             aria-checked={selected}
             onClick={() => onChange(option.value)}
             className={cn(
-              "min-w-0 flex-1 rounded-[5px] font-medium tracking-tight transition-colors",
+              "min-w-0 flex-1 rounded-full font-medium tracking-tight transition-colors",
               size === "compact"
                 ? "h-7 px-1.5 text-[11px]"
                 : "h-8 px-2 text-[13px]",
               selected
-                ? "bg-white text-[#1D1D1F]"
+                ? "bg-white text-[#1D1D1F] shadow-[0_1px_2px_rgba(0,0,0,0.08)]"
                 : "bg-transparent text-[#6E6E73] hover:text-[#1D1D1F]",
             )}
           >

@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { Input } from "@/components/ui/input";
+import { clamp } from "@/lib/math";
 import { cn } from "@/lib/utils";
 
 type NumberFieldProps = {
@@ -42,7 +43,16 @@ export function NumberField({
     if (Number.isNaN(parsed)) {
       return;
     }
-    onCommit(parsed);
+    onCommit(clamp(parsed, min, max));
+  }
+
+  function nudge(direction: 1 | -1, large: boolean) {
+    const delta = (large ? step * 10 : step) * direction;
+    const base = draft !== null ? Number.parseFloat(draft) : value;
+    const current = Number.isNaN(base) ? value : base;
+    const next = clamp(current + delta, min, max);
+    setDraft(null);
+    onCommit(next);
   }
 
   return (
@@ -60,10 +70,20 @@ export function NumberField({
         onKeyDown={(event) => {
           if (event.key === "Enter") {
             event.currentTarget.blur();
+            return;
+          }
+          if (event.key === "ArrowUp") {
+            event.preventDefault();
+            nudge(1, event.shiftKey);
+            return;
+          }
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            nudge(-1, event.shiftKey);
           }
         }}
         className={cn(
-          "h-7 rounded-md border-[#D2D2D7] bg-white px-2 text-right font-sans text-[13px] tabular-nums tracking-tight shadow-none focus-visible:border-[#1D1D1F] focus-visible:ring-0",
+          "h-7 rounded-full border-transparent bg-[#E8E8ED] px-2.5 text-right font-sans text-[12px] font-medium tabular-nums tracking-tight shadow-none focus-visible:border-[#1D1D1F] focus-visible:bg-white focus-visible:ring-0",
           suffix ? "pr-6" : "",
           className,
         )}
