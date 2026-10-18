@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-Open [http://127.0.0.1:4321](http://127.0.0.1:4321).
+Open [http://localhost:3000](http://localhost:3000).
 
 ## How it works
 
