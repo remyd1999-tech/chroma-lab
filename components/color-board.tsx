@@ -9,8 +9,8 @@ import {
   cssVariablesBlock,
   hexList,
   oklchList,
+  swatchSvg,
   type ColorStop,
-  type ResolvedColor,
 } from "@/lib/color";
 import { clamp } from "@/lib/math";
 import { buildStaggerCombos, type StaggerCounts } from "@/lib/stagger";
@@ -72,7 +72,7 @@ export function ColorBoard({
   );
 
   const flatColors = useMemo(
-    () => combos.map((combo) => combo.colors[0] as ResolvedColor),
+    () => combos.flatMap((combo) => combo.colors),
     [combos],
   );
 
@@ -170,7 +170,7 @@ export function ColorBoard({
               key={`${combo.hueIndex}-${combo.chromaIndex}-${combo.lightnessIndex}`}
               type="button"
               title={combo.detail}
-              onClick={() => copy(index, oklchList(combo.colors))}
+              onClick={() => copy(index, swatchSvg(combo.colors))}
               className="group flex min-w-0 flex-col gap-2 text-left"
             >
               <span className="flex aspect-[2/1] w-full overflow-hidden">

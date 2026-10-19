@@ -117,6 +117,19 @@ export function oklchList(colors: ResolvedColor[]): string {
   return colors.map((color) => color.css).join("\n");
 }
 
+/** Adjacent filled squares as SVG markup (clipboard-friendly). */
+export function swatchSvg(colors: ResolvedColor[], size = 100): string {
+  if (colors.length === 0) return "";
+  const width = size * colors.length;
+  const rects = colors
+    .map(
+      (color, index) =>
+        `<rect x="${index * size}" y="0" width="${size}" height="${size}" fill="${color.hex}"/>`,
+    )
+    .join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${size}" viewBox="0 0 ${width} ${size}">${rects}</svg>`;
+}
+
 export function normalizeHexInput(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return "";
