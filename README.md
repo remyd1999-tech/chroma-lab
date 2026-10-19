@@ -11,6 +11,19 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## GitHub Pages
+
+The app is a static export (`output: "export"`). On every push to `main`, GitHub Actions builds and deploys to Pages.
+
+**One-time setup** in the repo settings:
+
+1. **Settings → Pages → Build and deployment → Source**: choose **GitHub Actions**
+2. Push to `main` (or run the **Deploy to GitHub Pages** workflow manually)
+
+Live URL (after the first successful deploy):
+
+[https://remyd1999-tech.github.io/chroma-lab/](https://remyd1999-tech.github.io/chroma-lab/)
+
 ## How it works
 
 Everything lives on one screen.
