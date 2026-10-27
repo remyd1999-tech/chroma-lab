@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { Input } from "@/components/ui/input";
-import { clamp } from "@/lib/math";
+import { clamp, roundTo } from "@/lib/math";
 import { cn } from "@/lib/utils";
 
 type NumberFieldProps = {
@@ -43,14 +43,14 @@ export function NumberField({
     if (Number.isNaN(parsed)) {
       return;
     }
-    onCommit(clamp(parsed, min, max));
+    onCommit(clamp(roundTo(parsed, decimals), min, max));
   }
 
   function nudge(direction: 1 | -1, large: boolean) {
     const delta = (large ? step * 10 : step) * direction;
     const base = draft !== null ? Number.parseFloat(draft) : value;
     const current = Number.isNaN(base) ? value : base;
-    const next = clamp(current + delta, min, max);
+    const next = clamp(roundTo(current + delta, decimals), min, max);
     setDraft(null);
     onCommit(next);
   }

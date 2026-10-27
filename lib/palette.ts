@@ -1,4 +1,4 @@
-import { clamp, roundTo } from "@/lib/math";
+import { clamp, roundChannel } from "@/lib/math";
 import type { ColorStop } from "@/lib/color";
 
 export const MIN_PROPORTION = 4;
@@ -22,7 +22,7 @@ export function setChannelValue(
   value: number,
 ): number[] {
   const next = values.slice();
-  next[index] = clamp(Math.round(value), 0, 100);
+  next[index] = clamp(roundChannel(value), 0, 100);
   return next;
 }
 
@@ -31,19 +31,19 @@ export function setChannelOffset(values: number[], offset: number): number[] {
   const max = Math.max(...values);
   const mid = (min + max) / 2;
   const delta = clamp(offset - mid, -min, 100 - max);
-  return values.map((value) => clamp(Math.round(value + delta), 0, 100));
+  return values.map((value) => clamp(roundChannel(value + delta), 0, 100));
 }
 
 export function setChannelGap(values: number[], gap: number): number[] {
   const n = values.length;
   const mid = channelOffset(values);
   const maxGap = maxChannelGap(values);
-  const g = clamp(Math.round(gap), 0, Math.round(maxGap));
-  const low = Math.round(mid - g / 2);
-  const high = Math.round(mid + g / 2);
+  const g = clamp(roundChannel(gap), 0, roundChannel(maxGap));
+  const low = roundChannel(mid - g / 2);
+  const high = roundChannel(mid + g / 2);
 
   if (n === 1) {
-    return [Math.round(mid)];
+    return [roundChannel(mid)];
   }
 
   const ranked = values
@@ -53,7 +53,7 @@ export function setChannelGap(values: number[], gap: number): number[] {
   const next = values.slice();
   for (let rank = 0; rank < n; rank += 1) {
     const t = rank / (n - 1);
-    next[ranked[rank].index] = Math.round(low + t * (high - low));
+    next[ranked[rank].index] = roundChannel(low + t * (high - low));
   }
   next[ranked[0].index] = low;
   next[ranked[n - 1].index] = high;
@@ -108,8 +108,8 @@ export function resizeStops(stops: ColorStop[], count: number): ColorStop[] {
   return Array.from({ length: count }, (_, index) => {
     const t = count === 1 ? 0 : index / (count - 1);
     return {
-      l: roundTo(lMin + t * (lMax - lMin), 0),
-      c: roundTo(cMin + t * (cMax - cMin), 0),
+      l: roundChannel(lMin + t * (lMax - lMin)),
+      c: roundChannel(cMin + t * (cMax - cMin)),
       h: stops[Math.min(index, stops.length - 1)].h,
     };
   });

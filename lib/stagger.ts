@@ -1,5 +1,5 @@
 import { resolveColor, type ColorStop, type ResolvedColor } from "@/lib/color";
-import { clamp, roundTo, wrapHue } from "@/lib/math";
+import { clamp, formatChannel, roundChannel, wrapHue } from "@/lib/math";
 
 export type StaggerCounts = {
   hue: number;
@@ -22,9 +22,9 @@ export type StaggerCombo = {
 };
 
 function linspace(count: number, min: number, max: number, fallback: number): number[] {
-  if (count <= 1) return [clamp(roundTo(fallback, 0), min, max)];
+  if (count <= 1) return [clamp(roundChannel(fallback), min, max)];
   return Array.from({ length: count }, (_, index) =>
-    roundTo(min + (index / (count - 1)) * (max - min), 0),
+    roundChannel(min + (index / (count - 1)) * (max - min)),
   );
 }
 
@@ -94,8 +94,8 @@ export function shiftPaletteToPrimary(
   const dH = primary.h - origin.h;
 
   return stops.map((stop) => ({
-    l: clamp(roundTo(stop.l + dL, 0), 0, 100),
-    c: clamp(roundTo(stop.c + dC, 0), 0, 100),
+    l: clamp(roundChannel(stop.l + dL), 0, 100),
+    c: clamp(roundChannel(stop.c + dC), 0, 100),
     h: wrapHue(stop.h + dH),
   }));
 }
@@ -139,7 +139,7 @@ export function buildStaggerCombos(
             lightnessIndex,
             lightnessCount: counts.lightness,
           }),
-          detail: `L ${Math.round(l)} · C ${Math.round(c)} · H ${Math.round(h)}`,
+          detail: `L ${formatChannel(l)} · C ${formatChannel(c)} · H ${Math.round(h)}`,
           hueIndex,
           chromaIndex,
           lightnessIndex,

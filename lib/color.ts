@@ -1,6 +1,6 @@
 import { converter, formatHex, inGamut, parse } from "culori";
 
-import { clamp, roundTo, wrapHue } from "@/lib/math";
+import { clamp, roundChannel, roundTo, wrapHue } from "@/lib/math";
 
 const toOklch = converter("oklch");
 
@@ -65,7 +65,7 @@ export function clampChromaToSrgb(l: number, chroma: number, h: number): number 
 }
 
 export function formatOklch(l: number, chroma: number, h: number): string {
-  const lightness = roundTo(l, 1).toFixed(1);
+  const lightness = roundTo(l, 2).toFixed(2);
   const c = roundTo(chroma, 3).toFixed(3);
   const hue = roundTo(h, 1).toFixed(1);
   return `oklch(${lightness}% ${c} ${hue})`;
@@ -145,8 +145,8 @@ export function stopFromHex(raw: string): ColorStop | null {
   const oklch = toOklch(parsed);
   if (!oklch || oklch.l == null) return null;
   return {
-    l: roundTo((oklch.l ?? 0) * 100, 0),
-    c: roundTo(oklchChromaToUi(oklch.c ?? 0), 0),
+    l: roundChannel((oklch.l ?? 0) * 100),
+    c: roundChannel(oklchChromaToUi(oklch.c ?? 0)),
     h: wrapHue(oklch.h ?? 0),
   };
 }

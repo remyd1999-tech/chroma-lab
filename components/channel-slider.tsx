@@ -5,7 +5,12 @@ import { useId, useRef, useState } from "react";
 import { NumberField } from "@/components/number-field";
 import { Label } from "@/components/ui/label";
 import type { ResolvedColor } from "@/lib/color";
-import { clamp } from "@/lib/math";
+import {
+  CHANNEL_DECIMALS,
+  clamp,
+  formatChannel,
+  roundChannel,
+} from "@/lib/math";
 import {
   channelGap,
   channelOffset,
@@ -26,10 +31,11 @@ type ChannelSliderProps = {
 };
 
 const HANDLE = 36;
+const CHANNEL_STEP = 10 ** -CHANNEL_DECIMALS;
 
 function valueFromClientX(clientX: number, rect: DOMRect): number {
   const ratio = (clientX - rect.left) / rect.width;
-  return clamp(Math.round(ratio * 100), 0, 100);
+  return clamp(roundChannel(ratio * 100), 0, 100);
 }
 
 export function ChannelSlider({
@@ -160,7 +166,7 @@ export function ChannelSlider({
             className="pointer-events-none absolute top-1/2 -translate-x-1/2 -translate-y-1/2 text-[13px] font-semibold text-white tabular-nums"
             style={{ left: `${mid}%` }}
           >
-            {Math.round(gap)}
+            {formatChannel(gap)}
           </span>
         ) : null}
         {values.map((value, index) => {
@@ -176,7 +182,7 @@ export function ChannelSlider({
               aria-valuemax={100}
               aria-valuenow={value}
               className={cn(
-                "absolute top-1/2 flex size-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-[12px] font-semibold tabular-nums shadow-[0_1px_3px_rgba(0,0,0,0.18)] ring-2 ring-white",
+                "absolute top-1/2 flex size-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-[10px] font-semibold tabular-nums shadow-[0_1px_3px_rgba(0,0,0,0.18)] ring-2 ring-white",
                 isActive ? "z-20" : "z-10",
               )}
               style={{
@@ -198,7 +204,7 @@ export function ChannelSlider({
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
               onKeyDown={(event) => {
-                const step = event.shiftKey ? 10 : 1;
+                const step = event.shiftKey ? 1 : CHANNEL_STEP;
                 if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
                   event.preventDefault();
                   onChange(setChannelValue(values, index, value - step));
@@ -209,7 +215,7 @@ export function ChannelSlider({
                 }
               }}
             >
-              {value}
+              {formatChannel(value)}
             </button>
           );
         })}
@@ -219,10 +225,12 @@ export function ChannelSlider({
         <label className="flex items-center justify-start gap-2 text-[12px] text-[#6E6E73]">
           Offset
           <NumberField
-            value={Math.round(offset)}
+            value={roundChannel(offset)}
             min={0}
             max={100}
-            className="w-[56px]"
+            step={CHANNEL_STEP}
+            decimals={CHANNEL_DECIMALS}
+            className="w-[68px]"
             aria-label={`${label} offset`}
             onCommit={(next) => onChange(setChannelOffset(values, next))}
           />
@@ -230,10 +238,12 @@ export function ChannelSlider({
         <label className="flex items-center justify-start gap-2 text-[12px] text-[#6E6E73]">
           Gap
           <NumberField
-            value={Math.round(gap)}
+            value={roundChannel(gap)}
             min={0}
-            max={Math.round(maxChannelGap(values))}
-            className="w-[56px]"
+            max={roundChannel(maxChannelGap(values))}
+            step={CHANNEL_STEP}
+            decimals={CHANNEL_DECIMALS}
+            className="w-[68px]"
             aria-label={`${label} gap`}
             onCommit={(next) => onChange(setChannelGap(values, next))}
           />
