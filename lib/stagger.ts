@@ -1,4 +1,9 @@
-import { resolveColor, type ColorStop, type ResolvedColor } from "@/lib/color";
+import {
+  resolveColor,
+  type ColorStop,
+  type DisplayGamut,
+  type ResolvedColor,
+} from "@/lib/color";
 import { clamp, formatChannel, roundChannel, wrapHue } from "@/lib/math";
 
 export type StaggerCounts = {
@@ -107,6 +112,7 @@ export function shiftPaletteToPrimary(
 export function buildStaggerCombos(
   stops: ColorStop[],
   counts: StaggerCounts,
+  gamut: DisplayGamut = "p3",
 ): StaggerCombo[] {
   const origin = stops[0] ?? { l: 50, c: 20, h: 0 };
   const hues = hueJumpSteps(counts.hue, origin.h);
@@ -124,7 +130,7 @@ export function buildStaggerCombos(
       lights.forEach((l, lightnessIndex) => {
         const primary: ColorStop = { l, c, h };
         const shifted = shiftPaletteToPrimary(stops, primary);
-        const colors = shifted.map((stop) => resolveColor(stop));
+        const colors = shifted.map((stop) => resolveColor(stop, gamut));
         combos.push({
           stops: shifted,
           colors,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { BaseColors } from "@/components/base-colors";
 import { ChannelSlider } from "@/components/channel-slider";
@@ -8,7 +8,12 @@ import { ColorBoard } from "@/components/color-board";
 import { HueWheel } from "@/components/hue-wheel";
 import { ProportionBar } from "@/components/proportion-bar";
 import { Segmented } from "@/components/segmented";
-import { resolveColor, stopFromHex, type ColorStop } from "@/lib/color";
+import {
+  resolveColor,
+  stopFromHex,
+  type ColorStop,
+  type DisplayGamut,
+} from "@/lib/color";
 import {
   type HarmonyId,
   applyHarmonyKeepingLocks,
@@ -69,6 +74,7 @@ export function ChromaApp() {
     limit: 10,
     coalesceMs: 400,
   });
+  const [gamut, setGamut] = useState<DisplayGamut>("p3");
 
   const {
     count,
@@ -85,8 +91,8 @@ export function ChromaApp() {
   } = state;
 
   const resolved = useMemo(
-    () => colors.map((stop) => resolveColor(stop)),
-    [colors],
+    () => colors.map((stop) => resolveColor(stop, gamut)),
+    [colors, gamut],
   );
 
   const usage: UsageValue =
@@ -303,6 +309,7 @@ export function ChromaApp() {
             count={count}
             harmony={harmony}
             baseHue={baseHue}
+            gamut={gamut}
             onHarmonyChange={onHarmonyChange}
             onRotate={onRotate}
             onHueChange={onHueChange}
@@ -317,6 +324,8 @@ export function ChromaApp() {
         chromaCount={chromaCount}
         lightnessCount={lightnessCount}
         columns={columns}
+        gamut={gamut}
+        onGamutChange={setGamut}
         onHueCountChange={(value) => patch({ hueCount: value }, true)}
         onChromaCountChange={(value) => patch({ chromaCount: value }, true)}
         onLightnessCountChange={(value) =>

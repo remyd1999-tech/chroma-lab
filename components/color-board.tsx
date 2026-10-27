@@ -11,6 +11,7 @@ import {
   oklchList,
   swatchSvg,
   type ColorStop,
+  type DisplayGamut,
 } from "@/lib/color";
 import { clamp } from "@/lib/math";
 import { buildStaggerCombos, type StaggerCounts } from "@/lib/stagger";
@@ -23,6 +24,8 @@ type ColorBoardProps = {
   chromaCount: number;
   lightnessCount: number;
   columns: number;
+  gamut: DisplayGamut;
+  onGamutChange: (gamut: DisplayGamut) => void;
   onHueCountChange: (value: number) => void;
   onChromaCountChange: (value: number) => void;
   onLightnessCountChange: (value: number) => void;
@@ -50,12 +53,15 @@ export function ColorBoard({
   chromaCount,
   lightnessCount,
   columns,
+  gamut,
+  onGamutChange,
   onHueCountChange,
   onChromaCountChange,
   onLightnessCountChange,
   onColumnsChange,
 }: ColorBoardProps) {
   const [copied, setCopied] = useState<CopyKey>(null);
+  const srgb = gamut === "srgb";
 
   const counts: StaggerCounts = useMemo(
     () => ({
@@ -67,8 +73,8 @@ export function ColorBoard({
   );
 
   const combos = useMemo(
-    () => buildStaggerCombos(stops, counts),
-    [stops, counts],
+    () => buildStaggerCombos(stops, counts, gamut),
+    [stops, counts, gamut],
   );
 
   const flatColors = useMemo(
@@ -110,51 +116,76 @@ export function ColorBoard({
           />
         </div>
 
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-          <CopyButton
-            label="Copy OKLCH"
-            copied={copied === "oklch"}
-            onClick={() => copy("oklch", oklchList(flatColors))}
-          />
-          <CopyButton
-            label="Copy HEX"
-            copied={copied === "hex"}
-            onClick={() => copy("hex", hexList(flatColors))}
-          />
-          <CopyButton
-            label="Copy CSS"
-            copied={copied === "css"}
-            onClick={() => copy("css", cssVariablesBlock(flatColors))}
-          />
-          <span className="ml-1 text-[11px] tabular-nums text-[#6E6E73]">
-            {combos.length} · {columns} col
-          </span>
-          <Button
+        <div className="ml-auto flex flex-col items-end gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <CopyButton
+              label="Copy OKLCH"
+              copied={copied === "oklch"}
+              onClick={() => copy("oklch", oklchList(flatColors))}
+            />
+            <CopyButton
+              label="Copy HEX"
+              copied={copied === "hex"}
+              onClick={() => copy("hex", hexList(flatColors))}
+            />
+            <CopyButton
+              label="Copy CSS"
+              copied={copied === "css"}
+              onClick={() => copy("css", cssVariablesBlock(flatColors))}
+            />
+            <span className="ml-1 text-[11px] tabular-nums text-[#6E6E73]">
+              {combos.length} · {columns} col
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-label="Remove column"
+              disabled={columns <= MIN_COLUMNS}
+              onClick={() =>
+                onColumnsChange(clamp(columns - 1, MIN_COLUMNS, MAX_COLUMNS))
+              }
+              className="size-8 rounded-full border-[#D2D2D7] bg-white p-0 shadow-none hover:bg-[#F5F5F7]"
+            >
+              <Minus className="size-3.5" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-label="Add column"
+              disabled={columns >= MAX_COLUMNS}
+              onClick={() =>
+                onColumnsChange(clamp(columns + 1, MIN_COLUMNS, MAX_COLUMNS))
+              }
+              className="size-8 rounded-full border-[#D2D2D7] bg-white p-0 shadow-none hover:bg-[#F5F5F7]"
+            >
+              <Plus className="size-3.5" />
+            </Button>
+          </div>
+          <button
             type="button"
-            variant="outline"
-            size="sm"
-            aria-label="Remove column"
-            disabled={columns <= MIN_COLUMNS}
-            onClick={() =>
-              onColumnsChange(clamp(columns - 1, MIN_COLUMNS, MAX_COLUMNS))
-            }
-            className="size-8 rounded-full border-[#D2D2D7] bg-white p-0 shadow-none hover:bg-[#F5F5F7]"
+            role="switch"
+            aria-checked={srgb}
+            aria-label="Clamp display to sRGB"
+            onClick={() => onGamutChange(srgb ? "p3" : "srgb")}
+            className="flex items-center gap-2 text-[12px] text-[#6E6E73]"
           >
-            <Minus className="size-3.5" />
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            aria-label="Add column"
-            disabled={columns >= MAX_COLUMNS}
-            onClick={() =>
-              onColumnsChange(clamp(columns + 1, MIN_COLUMNS, MAX_COLUMNS))
-            }
-            className="size-8 rounded-full border-[#D2D2D7] bg-white p-0 shadow-none hover:bg-[#F5F5F7]"
-          >
-            <Plus className="size-3.5" />
-          </Button>
+            <span
+              className={cn(
+                "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+                srgb ? "bg-[#1D1D1F]" : "bg-[#D2D2D7]",
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute top-0.5 left-0.5 size-4 rounded-full bg-white shadow-sm transition-transform",
+                  srgb && "translate-x-4",
+                )}
+              />
+            </span>
+            sRGB
+          </button>
         </div>
       </header>
 

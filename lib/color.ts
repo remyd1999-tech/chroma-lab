@@ -10,6 +10,9 @@ export type ColorStop = {
   h: number;
 };
 
+/** Display clamp target. Default rendering uses P3. */
+export type DisplayGamut = "p3" | "srgb";
+
 export type ResolvedColor = ColorStop & {
   chroma: number;
   displayChroma: number;
@@ -21,7 +24,8 @@ export type ResolvedColor = ColorStop & {
 };
 
 const MAX_CHROMA = 0.4;
-const gamutCheck = inGamut("rgb");
+const srgbGamutCheck = inGamut("rgb");
+const p3GamutCheck = inGamut("p3");
 
 export function uiChromaToOklch(c: number): number {
   return (clamp(c, 0, 100) / 100) * MAX_CHROMA;
@@ -35,8 +39,14 @@ export function lightnessToUnit(l: number): number {
   return clamp(l, 0, 100) / 100;
 }
 
-function isInSrgb(l: number, chroma: number, h: number): boolean {
-  return gamutCheck({
+function isInGamut(
+  gamut: DisplayGamut,
+  l: number,
+  chroma: number,
+  h: number,
+): boolean {
+  const check = gamut === "p3" ? p3GamutCheck : srgbGamutCheck;
+  return check({
     mode: "oklch",
     l,
     c: chroma,
@@ -44,10 +54,15 @@ function isInSrgb(l: number, chroma: number, h: number): boolean {
   });
 }
 
-export function clampChromaToSrgb(l: number, chroma: number, h: number): number {
+export function clampChromaToGamut(
+  gamut: DisplayGamut,
+  l: number,
+  chroma: number,
+  h: number,
+): number {
   const lightness = clamp(l, 0, 1);
   const requested = Math.max(0, chroma);
-  if (isInSrgb(lightness, requested, h)) {
+  if (isInGamut(gamut, lightness, requested, h)) {
     return requested;
   }
 
@@ -55,7 +70,7 @@ export function clampChromaToSrgb(l: number, chroma: number, h: number): number 
   let high = requested;
   for (let i = 0; i < 24; i += 1) {
     const mid = (low + high) / 2;
-    if (isInSrgb(lightness, mid, h)) {
+    if (isInGamut(gamut, lightness, mid, h)) {
       low = mid;
     } else {
       high = mid;
@@ -71,20 +86,25 @@ export function formatOklch(l: number, chroma: number, h: number): string {
   return `oklch(${lightness}% ${c} ${hue})`;
 }
 
-export function resolveColor(stop: ColorStop): ResolvedColor {
+export function resolveColor(
+  stop: ColorStop,
+  gamut: DisplayGamut = "p3",
+): ResolvedColor {
   const l = clamp(stop.l, 0, 100);
   const c = clamp(stop.c, 0, 100);
   const h = ((stop.h % 360) + 360) % 360;
   const chroma = uiChromaToOklch(c);
-  const displayChroma = clampChromaToSrgb(lightnessToUnit(l), chroma, h);
-  const inRange = isInSrgb(lightnessToUnit(l), chroma, h);
+  const unitL = lightnessToUnit(l);
+  const displayChroma = clampChromaToGamut(gamut, unitL, chroma, h);
+  const hexChroma = clampChromaToGamut("srgb", unitL, chroma, h);
+  const inRange = isInGamut(gamut, unitL, chroma, h);
   const css = formatOklch(l, chroma, h);
   const displayCss = formatOklch(l, displayChroma, h);
   const hex =
     formatHex({
       mode: "oklch",
-      l: lightnessToUnit(l),
-      c: displayChroma,
+      l: unitL,
+      c: hexChroma,
       h,
     }) ?? "#000000";
 

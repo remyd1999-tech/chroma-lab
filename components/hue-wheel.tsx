@@ -4,9 +4,10 @@ import { useMemo, useRef } from "react";
 
 import { Label } from "@/components/ui/label";
 import {
-  clampChromaToSrgb,
+  clampChromaToGamut,
   formatOklch,
   lightnessToUnit,
+  type DisplayGamut,
   type ResolvedColor,
   uiChromaToOklch,
 } from "@/lib/color";
@@ -22,6 +23,7 @@ type HueWheelProps = {
   count: number;
   harmony: HarmonyId;
   baseHue: number;
+  gamut?: DisplayGamut;
   onHarmonyChange: (harmony: HarmonyId) => void;
   onRotate: (baseHue: number) => void;
   onHueChange: (index: number, hue: number) => void;
@@ -121,6 +123,7 @@ export function HueWheel({
   count,
   harmony,
   baseHue,
+  gamut = "p3",
   onHarmonyChange,
   onRotate,
   onHueChange,
@@ -138,11 +141,11 @@ export function HueWheel({
     const requested = uiChromaToOklch(c);
     const stops: string[] = [];
     for (let hue = 0; hue <= 360; hue += 15) {
-      const safe = clampChromaToSrgb(lightnessToUnit(l), requested, hue);
+      const safe = clampChromaToGamut(gamut, lightnessToUnit(l), requested, hue);
       stops.push(`${formatOklch(l, safe, hue)} ${hue}deg`);
     }
     return `conic-gradient(from 180deg, ${stops.join(", ")})`;
-  }, [colors]);
+  }, [colors, gamut]);
 
   const points: Point[] = useMemo(
     () =>
